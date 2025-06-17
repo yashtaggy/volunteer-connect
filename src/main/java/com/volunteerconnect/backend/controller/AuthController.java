@@ -14,8 +14,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 // Import for specific authentication exceptions
-import org.springframework.security.core.AuthenticationException; // NEW IMPORT
-import org.springframework.security.authentication.BadCredentialsException; // NEW IMPORT (if you didn't have it)
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -41,6 +41,8 @@ public class AuthController {
                 .email(registerRequest.getEmail())
                 .firstName(registerRequest.getFirstName())
                 .lastName(registerRequest.getLastName())
+                // NEW: If role is provided in request, use it, otherwise default to VOLUNTEER
+                .role(registerRequest.getRole() != null ? registerRequest.getRole() : com.volunteerconnect.backend.model.role.Role.VOLUNTEER)
                 .build();
 
         if (userService.findByUsername(newUser.getUsername()).isPresent()) {
@@ -61,21 +63,35 @@ public class AuthController {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            String token = jwtService.generateToken(loginRequest.getUsername());
+            // Get the UserDetails object from the authentication principal
+            // It will be your 'User' entity since you implement UserDetails
+            User authenticatedUser = (User) authentication.getPrincipal();
 
-            return new ResponseEntity<>(new LoginResponse(
-                    token,
-                    "Bearer",
-                    loginRequest.getUsername()
-            ), HttpStatus.OK);
-        } catch (BadCredentialsException e) { // Catch specifically for incorrect credentials
-            // Consider logging e.g., log.warn("Bad credentials for user: {}", loginRequest.getUsername());
+            String token = jwtService.generateToken(authenticatedUser.getUsername());
+
+            // NEW: Construct LoginResponse with all required fields using the builder
+            LoginResponse response = LoginResponse.builder()
+                    .token(token)
+                    .userId(authenticatedUser.getId())
+                    .username(authenticatedUser.getUsername())
+                    .email(authenticatedUser.getEmail())
+                    .firstName(authenticatedUser.getFirstName())
+                    .lastName(authenticatedUser.getLastName())
+                    .role(authenticatedUser.getRole())
+                    .build();
+
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        } catch (BadCredentialsException e) {
+            // Log this for debugging
+            System.err.println("Bad credentials for user: " + loginRequest.getUsername()); // Replace with actual logger
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED); // 401
-        } catch (AuthenticationException e) { // Catch any other authentication-related issues
-            // Consider logging e.g., log.error("Authentication error for user: {}", loginRequest.getUsername(), e);
+        } catch (AuthenticationException e) {
+            // Log this for debugging
+            System.err.println("Authentication error for user: " + loginRequest.getUsername() + ": " + e.getMessage()); // Replace with actual logger
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED); // 401
-        } catch (Exception e) { // Generic catch-all for any other unexpected errors
-            // Consider logging e.g., log.error("An unexpected error occurred during login for user: {}", loginRequest.getUsername(), e);
+        } catch (Exception e) {
+            // Log this for debugging
+            System.err.println("An unexpected error occurred during login for user: " + loginRequest.getUsername() + ": " + e.getMessage()); // Replace with actual logger
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR); // 500
         }
     }

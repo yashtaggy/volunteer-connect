@@ -1,21 +1,20 @@
 package com.volunteerconnect.backend.dto;
 
+import com.volunteerconnect.backend.model.role.Role; // CORRECTED: Import your Role enum from the 'role' subpackage
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import com.volunteerconnect.backend.model.role.Role; // NEW import for Role enum
-
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class RegisterRequest {
+public class UserResponseDto {
+    private Long id;
     private String username;
-    private String password;
     private String email;
     private String firstName;
     private String lastName;
-    private Role role; // NEW field for optional role during registration
+    private Role role; // Assuming you want to expose the role
 }

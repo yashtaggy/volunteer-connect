@@ -8,6 +8,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity; // NEW IMPORT
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,15 +20,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import java.time.Clock; // NEW: Import Clock
+import java.time.Clock;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true) // <-- ADD THIS ANNOTATION HERE
 public class SecurityConfig {
 
     private final UserRepository userRepository;
 
-    // The constructor no longer injects JwtAuthenticationFilter here
     public SecurityConfig(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
@@ -37,29 +38,28 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // NEW: Provide a default system Clock bean for JwtService
     @Bean
     public Clock clock() {
-        return Clock.systemDefaultZone(); // Uses the system's default time zone
+        return Clock.systemDefaultZone();
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter // JwtAuthenticationFilter is injected here as a method parameter
+            JwtAuthenticationFilter jwtAuthenticationFilter
     ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/**").permitAll() // Allow unauthenticated access to auth endpoints
-                        .requestMatchers("/api/users/**").authenticated() // Require authentication for /api/users/**
+                        .requestMatchers("/api/auth/**").permitAll()
+                        // Ensure that all *other* paths are authenticated at the URL level
+                        // This acts as a fallback if method-level @PreAuthorize is missed
                         .anyRequest().authenticated() // All other requests require authentication
                 )
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // Use stateless sessions for JWT
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .authenticationProvider(authenticationProvider()) // Set our custom authentication provider
-                // Add our JWT filter BEFORE Spring Security's default username/password filter
+                .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

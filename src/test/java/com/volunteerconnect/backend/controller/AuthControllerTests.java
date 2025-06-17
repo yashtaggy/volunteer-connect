@@ -4,10 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.volunteerconnect.backend.dto.LoginRequest;
 import com.volunteerconnect.backend.dto.LoginResponse;
 import com.volunteerconnect.backend.dto.RegisterRequest;
-import com.volunteerconnect.backend.service.UserService;
 import com.volunteerconnect.backend.model.User; // Added this import
-
+import com.volunteerconnect.backend.model.role.Role; // NEW: Import Role enum for tests
+import com.volunteerconnect.backend.service.UserService;
 import com.volunteerconnect.backend.security.JwtService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -56,17 +57,27 @@ public class AuthControllerTests {
 
     @Test
     void registerUserSuccess() throws Exception {
-        // <<< IMPORTANT CHANGE HERE (corresponds to line 58 in your error) >>>
-        // Instantiate RegisterRequest with all 5 arguments as per your DTO's @AllArgsConstructor
-        RegisterRequest registerRequest = new RegisterRequest("testuser", "password123", "test@example.com", "Test", "User");
+        // Corrected instantiation using builder pattern for RegisterRequest
+        RegisterRequest registerRequest = RegisterRequest.builder()
+                .username("testuser")
+                .password("password123")
+                .email("test@example.com")
+                .firstName("Test")
+                .lastName("User")
+                .role(Role.VOLUNTEER) // Explicitly set role for the test
+                .build();
 
         User savedUser = User.builder()
                 .username("testuser")
                 .password("encodedpassword") // Password would be encoded by service
+                .email("test@example.com")
+                .firstName("Test")
+                .lastName("User")
+                .role(Role.VOLUNTEER) // Match the role
                 .build();
 
         when(userService.findByUsername(any(String.class))).thenReturn(Optional.empty());
-        when(userService.registerNewUser(any(User.class))).thenReturn(savedUser);
+        when(userService.registerNewUser(any(User.class))).thenReturn(savedUser); // Mock to return the savedUser
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -80,13 +91,23 @@ public class AuthControllerTests {
 
     @Test
     void registerUserExists() throws Exception {
-        // <<< IMPORTANT CHANGE HERE (corresponds to line 85 in your error) >>>
-        // Instantiate RegisterRequest with all 5 arguments as per your DTO's @AllArgsConstructor
-        RegisterRequest registerRequest = new RegisterRequest("existinguser", "password123", "existing@example.com", "Existing", "User");
+        // Corrected instantiation using builder pattern for RegisterRequest
+        RegisterRequest registerRequest = RegisterRequest.builder()
+                .username("existinguser")
+                .password("password123")
+                .email("existing@example.com")
+                .firstName("Existing")
+                .lastName("User")
+                .role(Role.VOLUNTEER) // Explicitly set role for the test
+                .build();
 
         User existingUser = User.builder()
                 .username("existinguser")
                 .password("encodedpassword")
+                .email("existing@example.com")
+                .firstName("Existing")
+                .lastName("User")
+                .role(Role.VOLUNTEER) // Match the role
                 .build();
 
         when(userService.findByUsername(any(String.class))).thenReturn(Optional.of(existingUser));
@@ -104,14 +125,28 @@ public class AuthControllerTests {
     @Test
     void loginUserSuccess() throws Exception {
         LoginRequest loginRequest = new LoginRequest("testuser", "password123");
+        String jwtToken = "mocked_jwt_token";
+
+        // Mock User object that implements UserDetails and has all fields expected by LoginResponse
+        User authenticatedUser = User.builder()
+                .id(1L) // Assuming ID is 1L for the test
+                .username("testuser")
+                .email("test@example.com")
+                .firstName("Test")
+                .lastName("User")
+                .role(Role.VOLUNTEER) // Ensure the role is set for the mock user
+                .password("encodedPassword") // This isn't strictly needed for the principal mock, but good to have a complete mock
+                .build();
+
         Authentication authentication = mock(Authentication.class);
         when(authentication.isAuthenticated()).thenReturn(true);
-        when(authentication.getName()).thenReturn("testuser");
+        // Important: authentication.getPrincipal() should return your User object
+        when(authentication.getPrincipal()).thenReturn(authenticatedUser);
+        when(authentication.getName()).thenReturn(authenticatedUser.getUsername()); // Or testuser directly
+
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
-
-        String jwtToken = "mocked_jwt_token";
         when(jwtService.generateToken(any(String.class))).thenReturn(jwtToken);
 
         mockMvc.perform(post("/api/auth/login")
@@ -119,8 +154,12 @@ public class AuthControllerTests {
                         .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value(jwtToken))
-                .andExpect(jsonPath("$.type").value("Bearer"))
-                .andExpect(jsonPath("$.username").value("testuser"));
+                .andExpect(jsonPath("$.userId").value(authenticatedUser.getId()))
+                .andExpect(jsonPath("$.username").value(authenticatedUser.getUsername()))
+                .andExpect(jsonPath("$.email").value(authenticatedUser.getEmail()))
+                .andExpect(jsonPath("$.firstName").value(authenticatedUser.getFirstName()))
+                .andExpect(jsonPath("$.lastName").value(authenticatedUser.getLastName()))
+                .andExpect(jsonPath("$.role").value(authenticatedUser.getRole().name())); // Check role by its string name
 
         verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
         verify(jwtService, times(1)).generateToken(loginRequest.getUsername());
@@ -139,6 +178,6 @@ public class AuthControllerTests {
                 .andExpect(status().isUnauthorized());
 
         verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
-        verify(jwtService, never()).generateToken(any(String.class));
+        verify(jwtService, never()).generateToken(anyString());
     }
 }

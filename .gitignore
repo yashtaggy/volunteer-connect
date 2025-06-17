@@ -1,33 +1,55 @@
-HELP.md
-target/
+# Maven
+/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+.mvn/wrapper/MavenWrapperDownloader.java
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# Java
+*.class
 
-### IntelliJ IDEA ###
-.idea
-*.iws
+# IDEs
+.idea/
+.vscode/
 *.iml
 *.ipr
+*.iws
+.project
+.classpath
+.settings/
+.springBeans
+.apt_generated
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+# Operating System
+.DS_Store
+Thumbs.db
 
-### VS Code ###
-.vscode/
+# Logs
+*.log
+logs/
+
+# Environment variables (if you have them, often in src/main/resources/application.properties)
+# If your application.properties contains sensitive data you don't want on GitHub,
+# you might want to exclude it or use environment variables/external config.
+# For now, if it's just database connection strings for local, it's often included.
+# If you had application-dev.properties, application-prod.properties, you might exclude prod ones.
+# For now, let's assume application.properties is fine to include.
+
+# Compiled Spring Boot apps
+*.jar
+*.war
+*.zip
+*.tar.gz
+
+# Intellij IDEA specific (already covered by .idea/ but good to be explicit)
+out/
+
+# Local data or databases
+*.mv.db  # H2 database files
+*.trace.db # H2 trace files
