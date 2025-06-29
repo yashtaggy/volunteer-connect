@@ -1,6 +1,6 @@
 package com.volunteerconnect.backend.dto;
 
-import com.volunteerconnect.backend.model.role.Role; // CORRECTED: Import your Role enum from the 'role' subpackage
+import com.volunteerconnect.backend.model.Role; // CORRECTED: Import your Role enum from the 'role' subpackage
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

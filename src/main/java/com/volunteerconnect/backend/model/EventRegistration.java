@@ -1,41 +1,46 @@
 package com.volunteerconnect.backend.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
+import lombok.*;
 import java.time.LocalDateTime;
 
-@Data
+@Entity
+@Table(name = "event_registrations", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"event_id", "volunteer_id"}) // Ensures a volunteer can only register once per event
+})
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Entity
-@Table(name = "event_registrations") // Table to store event sign-ups
 public class EventRegistration {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Many registrations can be for one event
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;
 
-    // Many registrations can be by one user (volunteer)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "volunteer_id", nullable = false) // Naming convention volunteer_id
-    private User volunteer; // The User who is volunteering for this event
+    @JoinColumn(name = "volunteer_id", nullable = false)
+    private User volunteer; // This is the user who registers as a volunteer
 
-    @Column(nullable = false)
-    private LocalDateTime registrationDate; // When the volunteer signed up
+    private LocalDateTime registrationDate; // When the registration occurred
 
+    // --- ADD THIS FIELD ---
     @Enumerated(EnumType.STRING) // Store enum as String in DB
-    @Column(nullable = false)
-    private RegistrationStatus status; // E.g., PENDING, APPROVED, CANCELLED, COMPLETED
+    private RegistrationStatus status;
+    // ----------------------
 
-    // You could add other fields here like notes, hours contributed, etc.
+    @PrePersist // Set registrationDate automatically before persisting
+    protected void onCreate() {
+        if (registrationDate == null) {
+            registrationDate = LocalDateTime.now();
+        }
+        // Set default status if not already set during build
+        if (status == null) {
+            status = RegistrationStatus.PENDING; // Default to PENDING for new registrations
+        }
+    }
 }

@@ -1,16 +1,16 @@
+// Example for LoginResponse.java
 package com.volunteerconnect.backend.dto;
 
+import com.volunteerconnect.backend.model.Role;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import com.volunteerconnect.backend.model.role.Role; // NEW import for Role enum
-
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class LoginResponse {
     private String token;
     private Long userId;
@@ -18,5 +18,5 @@ public class LoginResponse {
     private String email;
     private String firstName;
     private String lastName;
-    private Role role; // NEW field to include user's role
+    private String role;
 }

@@ -6,8 +6,10 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.crypto.SecretKey;
@@ -17,6 +19,9 @@ import java.time.ZoneOffset;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any; // <--- NEW: Import any() for mocking generic types
 
 class JwtServiceTests {
 
@@ -29,11 +34,8 @@ class JwtServiceTests {
 
     @BeforeEach
     void setUp() {
-        // Dynamically set fixedClock to current time
         fixedClock = Clock.fixed(Instant.now(), ZoneOffset.UTC);
-
         jwtService = new JwtService(fixedClock);
-
         ReflectionTestUtils.setField(jwtService, "SECRET_KEY", testSecret);
         ReflectionTestUtils.setField(jwtService, "JWT_EXPIRATION", jwtExpirationMs);
     }
@@ -80,18 +82,36 @@ class JwtServiceTests {
     @Test
     void generateToken_shouldGenerateValidToken() {
         String username = "testUser";
-        String token = jwtService.generateToken(username);
+        UserDetails userDetails = mock(UserDetails.class);
+        when(userDetails.getUsername()).thenReturn(username);
+
+        List<GrantedAuthority> authoritiesList = Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+        // CORRECTED LINE: Using any() matcher for the collection return type
+        when(userDetails.getAuthorities()).thenAnswer(invocation -> {
+            return Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+        });
+
+        String token = jwtService.generateToken(userDetails);
+
         assertNotNull(token);
         assertFalse(token.isEmpty());
         assertEquals(username, jwtService.extractUsername(token));
+
+        List<String> extractedRoles = jwtService.extractRoles(token);
+        assertFalse(extractedRoles.isEmpty());
+        assertTrue(extractedRoles.contains("ROLE_USER"));
     }
+
 
     @Test
     void validateToken_shouldReturnTrueForValidToken() {
-        UserDetails userDetails = new User("testUser", "password", new ArrayList<>());
+        UserDetails userDetails = new User("testUser", "password", Collections.emptyList());
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", Collections.singletonList("ROLE_USER"));
 
         String token = createTestToken(
-                new HashMap<>(),
+                claims,
                 userDetails.getUsername(),
                 fixedClock.instant().plusMillis(jwtExpirationMs).toEpochMilli()
         );
@@ -102,8 +122,11 @@ class JwtServiceTests {
     @Test
     void validateToken_shouldReturnFalseForExpiredToken() {
         String username = "testUser";
-        long expiredTime = fixedClock.instant().minusSeconds(60).toEpochMilli(); // already expired
-        String token = createTestToken(new HashMap<>(), username, expiredTime);
+        long expiredTime = fixedClock.instant().minusSeconds(60).toEpochMilli();
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", Collections.singletonList("ROLE_USER"));
+
+        String token = createTestToken(claims, username, expiredTime);
         UserDetails userDetails = new User(username, "password", Collections.emptyList());
 
         assertThrows(io.jsonwebtoken.ExpiredJwtException.class, () -> {
@@ -114,8 +137,34 @@ class JwtServiceTests {
     @Test
     void extractExpiration_shouldReturnCorrectDate() {
         long expirationMillis = fixedClock.instant().plusMillis(jwtExpirationMs).toEpochMilli();
-        String token = createTestToken(new HashMap<>(), "testuser", expirationMillis);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", Collections.singletonList("ROLE_USER"));
+
+        String token = createTestToken(claims, "testuser", expirationMillis);
         Date extractedExpiration = jwtService.extractExpiration(token);
-        assertEquals(expirationMillis, extractedExpiration.getTime(), 500); // 0.5 sec tolerance
+        assertEquals(expirationMillis, extractedExpiration.getTime(), 500);
+    }
+
+    @Test
+    void extractRoles_shouldReturnCorrectRoles() {
+        Map<String, Object> claims = new HashMap<>();
+        List<String> expectedRoles = Arrays.asList("ROLE_ORGANIZER", "ROLE_USER");
+        claims.put("roles", expectedRoles);
+
+        String token = createTestToken(claims, "testUserWithRoles", fixedClock.instant().plusMillis(jwtExpirationMs).toEpochMilli());
+
+        List<String> actualRoles = jwtService.extractRoles(token);
+        assertNotNull(actualRoles);
+        assertFalse(actualRoles.isEmpty());
+        assertEquals(2, actualRoles.size());
+        assertTrue(actualRoles.containsAll(expectedRoles));
+    }
+
+    @Test
+    void extractRoles_shouldReturnEmptyListIfNoRolesClaim() {
+        String token = createTestToken(new HashMap<>(), "testUserNoRoles", fixedClock.instant().plusMillis(jwtExpirationMs).toEpochMilli());
+        List<String> actualRoles = jwtService.extractRoles(token);
+        assertNotNull(actualRoles);
+        assertTrue(actualRoles.isEmpty());
     }
 }

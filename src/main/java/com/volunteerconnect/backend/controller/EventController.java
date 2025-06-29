@@ -2,174 +2,88 @@ package com.volunteerconnect.backend.controller;
 
 import com.volunteerconnect.backend.dto.EventRequest;
 import com.volunteerconnect.backend.dto.EventResponse;
-import com.volunteerconnect.backend.dto.UserSummaryDto;
-import com.volunteerconnect.backend.dto.organization.OrganizationSummaryDto;
-import com.volunteerconnect.backend.model.Event;
-import com.volunteerconnect.backend.model.User;
-import com.volunteerconnect.backend.model.organization.Organization;
-import com.volunteerconnect.backend.repository.EventRepository;
-import com.volunteerconnect.backend.repository.UserRepository;
-import com.volunteerconnect.backend.repository.organization.OrganizationRepository;
+import com.volunteerconnect.backend.model.User; // Ensure User model is imported for getPrincipal()
+import com.volunteerconnect.backend.service.EventService; // Import the NEW EventService
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize; // Keep this import
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
 
-    @Autowired
-    private EventRepository eventRepository;
+    // Inject the NEW EventService interface
+    private final EventService eventService;
 
     @Autowired
-    private UserRepository userRepository;
+    public EventController(EventService eventService) {
+        this.eventService = eventService;
+    }
 
-    @Autowired
-    private OrganizationRepository organizationRepository;
-
-    // Helper method to convert Event entity to EventResponse DTO
-    private EventResponse convertToDto(Event event) {
-        UserSummaryDto organizerDto = null;
-        if (event.getOrganizer() != null) {
-            organizerDto = UserSummaryDto.builder()
-                    .id(event.getOrganizer().getId())
-                    .username(event.getOrganizer().getUsername())
-                    .email(event.getOrganizer().getEmail())
-                    .firstName(event.getOrganizer().getFirstName())
-                    .lastName(event.getOrganizer().getLastName())
-                    .build();
+    // Helper method to get the current authenticated user's ID
+    // This assumes your Authentication.getPrincipal() returns your User entity directly
+    // from your UserDetailsService/JwtService implementation.
+    private Long getCurrentAuthenticatedUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated.");
         }
-
-        OrganizationSummaryDto organizationDto = null;
-        if (event.getOrganization() != null) {
-            organizationDto = OrganizationSummaryDto.builder()
-                    .id(event.getOrganization().getId())
-                    .name(event.getOrganization().getName())
-                    .contactEmail(event.getOrganization().getContactEmail())
-                    .build();
+        // Ensure the principal is an instance of your User model
+        if (authentication.getPrincipal() instanceof User) {
+            return ((User) authentication.getPrincipal()).getId();
         }
-
-        List<UserSummaryDto> registeredVolunteers = event.getRegistrations().stream()
-                .map(registration -> UserSummaryDto.builder()
-                        .id(registration.getVolunteer().getId())
-                        .username(registration.getVolunteer().getUsername())
-                        .email(registration.getVolunteer().getEmail())
-                        .firstName(registration.getVolunteer().getFirstName())
-                        .lastName(registration.getVolunteer().getLastName())
-                        .build())
-                .collect(Collectors.toList());
-
-        return EventResponse.builder()
-                .id(event.getId())
-                .title(event.getTitle())
-                .description(event.getDescription())
-                .eventDate(event.getEventDate())
-                .location(event.getLocation())
-                .capacity(event.getCapacity())
-                .active(event.isActive())
-                .organizer(organizerDto)
-                .organization(organizationDto)
-                .registeredVolunteers(registeredVolunteers)
-                .build();
+        // This fallback should rarely be hit if your security configuration is correct
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Could not determine authenticated user ID from principal.");
     }
 
     // --- CREATE Operation ---
     @PostMapping
-    // NEW: Only Organizers or Admins can create events
-    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    @PreAuthorize("hasRole('ORGANIZER')") // Only ORGANIZER can create events
     public ResponseEntity<EventResponse> createEvent(@RequestBody EventRequest eventRequest) {
-        User organizer = userRepository.findById(eventRequest.getOrganizerId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organizer with ID " + eventRequest.getOrganizerId() + " not found."));
-
-        Organization organization = organizationRepository.findById(eventRequest.getOrganizationId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization with ID " + eventRequest.getOrganizationId() + " not found."));
-
-        Event eventToSave = Event.builder()
-                .title(eventRequest.getTitle())
-                .description(eventRequest.getDescription())
-                .eventDate(eventRequest.getEventDate())
-                .location(eventRequest.getLocation())
-                .capacity(eventRequest.getCapacity())
-                .active(eventRequest.isActive())
-                .organizer(organizer)
-                .organization(organization)
-                .build();
-
-        Event savedEvent = eventRepository.save(eventToSave);
-        return new ResponseEntity<>(convertToDto(savedEvent), HttpStatus.CREATED);
+        // The current authenticated user (who is an ORGANIZER) will be the event's organizer
+        Long currentUserId = getCurrentAuthenticatedUserId();
+        EventResponse newEvent = eventService.createEvent(eventRequest, currentUserId);
+        return new ResponseEntity<>(newEvent, HttpStatus.CREATED);
     }
 
-    // --- READ Operations ---
+    // --- READ All Events ---
     @GetMapping
-    // Keep: Any authenticated user can view all events
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("isAuthenticated()") // Any authenticated user can view all events
     public ResponseEntity<List<EventResponse>> getAllEvents() {
-        List<Event> events = eventRepository.findAll();
-        List<EventResponse> eventResponses = events.stream()
-                .map(this::convertToDto)
-                .collect(Collectors.toList());
+        List<EventResponse> eventResponses = eventService.getAllEvents();
         return ResponseEntity.ok(eventResponses);
     }
 
+    // --- READ Single Event by ID ---
     @GetMapping("/{id}")
-    // Keep: Any authenticated user can view an event by ID
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("isAuthenticated()") // Any authenticated user can view an event by ID
     public ResponseEntity<EventResponse> getEventById(@PathVariable Long id) {
-        Optional<Event> event = eventRepository.findById(id);
-        return event.map(this::convertToDto)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> new ResponseEntity<>(HttpStatus.NOT_FOUND));
+        EventResponse event = eventService.getEventById(id);
+        return ResponseEntity.ok(event);
     }
 
     // --- UPDATE Operation ---
     @PutMapping("/{id}")
-    // NEW: Only Organizers or Admins can update events
-    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')") // Only Organizers or Admins can update events
     public ResponseEntity<EventResponse> updateEvent(@PathVariable Long id, @RequestBody EventRequest eventRequest) {
-        Optional<Event> optionalEvent = eventRepository.findById(id);
-
-        if (optionalEvent.isPresent()) {
-            Event existingEvent = optionalEvent.get();
-
-            User organizer = userRepository.findById(eventRequest.getOrganizerId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organizer with ID " + eventRequest.getOrganizerId() + " not found."));
-
-            Organization organization = organizationRepository.findById(eventRequest.getOrganizationId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization with ID " + eventRequest.getOrganizationId() + " not found."));
-
-            existingEvent.setTitle(eventRequest.getTitle());
-            existingEvent.setDescription(eventRequest.getDescription());
-            existingEvent.setEventDate(eventRequest.getEventDate());
-            existingEvent.setLocation(eventRequest.getLocation());
-            existingEvent.setCapacity(eventRequest.getCapacity());
-            existingEvent.setActive(eventRequest.isActive());
-            existingEvent.setOrganizer(organizer);
-            existingEvent.setOrganization(organization);
-
-            Event updatedEvent = eventRepository.save(existingEvent);
-            return ResponseEntity.ok(convertToDto(updatedEvent));
-        } else {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
+        Long currentUserId = getCurrentAuthenticatedUserId(); // Needed for authorization check in service
+        EventResponse updatedEvent = eventService.updateEvent(id, eventRequest, currentUserId);
+        return ResponseEntity.ok(updatedEvent);
     }
 
     // --- DELETE Operation ---
     @DeleteMapping("/{id}")
-    // NEW: Only Organizers or Admins can delete events
-    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')") // Only Organizers or Admins can delete events
     public ResponseEntity<HttpStatus> deleteEvent(@PathVariable Long id) {
-        if (eventRepository.existsById(id)) {
-            eventRepository.deleteById(id);
-            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
-        } else {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
+        Long currentUserId = getCurrentAuthenticatedUserId(); // Needed for authorization check in service
+        eventService.deleteEvent(id, currentUserId);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 }

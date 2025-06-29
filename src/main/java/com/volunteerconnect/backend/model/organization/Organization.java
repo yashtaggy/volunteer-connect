@@ -33,6 +33,7 @@ public class Organization {
     private String address; // Physical address or main location
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean active = true; // Is the organization currently active?
 
     // You might consider adding relationships here later, e.g.,

@@ -5,8 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-// You might add validation annotations here later if needed
-// import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotNull; // <--- This import is now crucial
 
 @Data
 @NoArgsConstructor
@@ -14,13 +13,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class EventRegistrationRequest {
 
-    // @NotNull(message = "Event ID is required") // Example validation
+    @NotNull(message = "Event ID is required") // <--- Uncommented and made active
     private Long eventId;
 
-    // @NotNull(message = "Volunteer ID is required") // Example validation
-    private Long volunteerId;
-
-    // Status is typically managed by the server on creation (e.g., defaults to PENDING)
-    // but could be included here if clients can set an initial status.
-    // For simplicity, we'll set it in the controller for now.
 }
