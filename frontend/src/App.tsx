@@ -1,38 +1,125 @@
-import React from 'react';
-    import './App.css'; // Make sure this path is correct
+// frontend/src/App.tsx
+import React, { useState, useEffect } from 'react';
+import './App.css';
 
-    // Import routing components
-    import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 
-    // Import your pages
-    import Home from './pages/Home';
-    import LoginPage from './pages/LoginPage';
+import Home from './pages/Home';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import EventsPage from './pages/EventsPage';
+import UserProfilePage from './pages/UserProfilePage'; // <-- IMPORT THIS
 
-    function App() {
-      return (
-        <Router> {/* BrowserRouter wraps your entire application */}
-          <div className="App">
-            <nav>
-              <ul>
-                <li>
-                  <Link to="/">Home</Link> {/* Link to the Home page */}
-                </li>
-                <li>
-                  <Link to="/login">Login</Link> {/* Link to the Login page */}
-                </li>
-                {/* Add more navigation links here as you create more pages */}
-              </ul>
-            </nav>
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isAuthenticated = localStorage.getItem('jwtToken');
+  const navigate = useNavigate();
 
-            {/* Define your routes */}
-            <Routes> {/* Routes component groups all your individual Route components */}
-              <Route path="/" element={<Home />} /> {/* Renders Home component for '/' path */}
-              <Route path="/login" element={<LoginPage />} /> {/* Renders LoginPage component for '/login' path */}
-              {/* Add more routes here for other pages */}
-            </Routes>
-          </div>
-        </Router>
-      );
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
     }
+  }, [isAuthenticated, navigate]);
 
-    export default App;
+  return isAuthenticated ? <>{children}</> : null;
+};
+
+function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateLoginStatus = () => {
+      const token = localStorage.getItem('jwtToken');
+      const username = localStorage.getItem('username');
+      if (token && username) {
+        setIsLoggedIn(true);
+        setCurrentUser(username);
+      } else {
+        setIsLoggedIn(false);
+        setCurrentUser(null);
+      }
+    };
+
+    updateLoginStatus();
+    window.addEventListener('storage', updateLoginStatus);
+    return () => {
+      window.removeEventListener('storage', updateLoginStatus);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('jwtToken');
+    localStorage.removeItem('userRoles');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  return (
+    <Router>
+      <div className="App">
+        <nav style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', justifyContent: 'center', gap: '20px' }}>
+            <li>
+              <Link to="/">Home</Link>
+            </li>
+            {isLoggedIn ? (
+              <>
+                <li>
+                  <Link to="/dashboard">Dashboard</Link>
+                </li>
+                <li>
+                  <Link to="/events">Events</Link>
+                </li>
+                <li>
+                  <Link to="/profile">Profile</Link> {/* <-- ADD THIS LINK */}
+                </li>
+                <li>
+                  <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', fontSize: '1em' }}>Logout ({currentUser})</button>
+                </li>
+              </>
+            ) : (
+              <li>
+                <Link to="/login">Login</Link>
+              </li>
+            )}
+          </ul>
+        </nav>
+
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <DashboardPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/events"
+            element={
+              <PrivateRoute>
+                <EventsPage />
+              </PrivateRoute>
+            }
+          />
+          {/* <-- ADD THIS PROTECTED ROUTE */}
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <UserProfilePage />
+              </PrivateRoute>
+            }
+          />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+export default App;

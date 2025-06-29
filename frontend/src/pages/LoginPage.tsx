@@ -1,43 +1,52 @@
 import React, { useState } from 'react';
-import axios from 'axios'; // Import axios
-import { useNavigate } from 'react-router-dom'; // To redirect after login
+import axios from 'axios'; // Make sure you have installed axios: npm install axios
+import { useNavigate } from 'react-router-dom'; // From react-router-dom
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string | null>(null); // State for error messages
-  const navigate = useNavigate(); // Hook for navigation
+  const navigate = useNavigate(); // Hook for programmatic navigation
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault(); // Prevent default form submission behavior (page reload)
     setError(null); // Clear previous errors
 
     try {
+      // Make the POST request to your backend's login endpoint
       const response = await axios.post('http://localhost:8080/api/auth/login', {
         username,
         password,
       });
 
-      const { token, roles, id } = response.data; // Assuming your backend returns token, roles, and id
+      // Destructure the response data to match the backend's LoginResponse DTO
+      // Ensure your backend's LoginResponse DTO returns 'token', 'userId', 'username', and 'role'
+      const { token, userId, username: returnedUsername, role } = response.data;
 
-      // Store token and user info in localStorage (or sessionStorage) for persistence
+      // Store authentication and user information in localStorage for persistence
       localStorage.setItem('jwtToken', token);
-      localStorage.setItem('userRoles', JSON.stringify(roles)); // Store roles as a string
-      localStorage.setItem('userId', id.toString()); // Store user ID
+      localStorage.setItem('userRoles', JSON.stringify([role])); // Store the single role as an array for consistency
+      localStorage.setItem('userId', userId.toString()); // Convert userId to string for localStorage
+      localStorage.setItem('username', returnedUsername); // Store the username
 
-      // Redirect to home page or a dashboard after successful login
-      navigate('/'); // Navigate to the home page
+      // Dispatch a custom event to notify other parts of the app (like App.tsx) about login
+      // This is particularly useful for the 'storage' event listener in App.tsx
+      window.dispatchEvent(new Event('storage'));
+
+      // Redirect to the home page or a dashboard after successful login
+      navigate('/');
 
       console.log('Login successful!', response.data);
-      // You might want to update a global state here to reflect logged-in status
-      alert('Login Successful!'); // For immediate feedback
+      alert('Login Successful!'); // Simple alert for immediate user feedback
 
     } catch (err) {
       console.error('Login failed:', err);
       if (axios.isAxiosError(err) && err.response) {
-        // Specific error message from backend
+        // If it's an Axios error and the response exists, try to get a specific message from backend
+        // Your backend might send a 'message' field in its error response, e.g., for 401 Unauthorized
         setError(err.response.data.message || 'Login failed. Please check your credentials.');
       } else {
+        // Generic error message for network issues or unexpected errors
         setError('An unexpected error occurred during login.');
       }
     }
