@@ -1,14 +1,20 @@
 package com.volunteerconnect.backend.service;
 
-import com.volunteerconnect.backend.dto.UserResponseDto;
-import com.volunteerconnect.backend.dto.UserUpdateDto;
+import com.volunteerconnect.backend.dto.AuthRequest;
+import com.volunteerconnect.backend.dto.JwtResponseDTO;
+import com.volunteerconnect.backend.dto.RegisterRequest;
+import com.volunteerconnect.backend.dto.UserProfileResponse; // <-- Import this
+import com.volunteerconnect.backend.dto.UserProfileUpdateRequest; // <-- Import this
 
-import java.util.List;
+public interface UserService {
 
-public interface UserService { // Make sure this is 'interface'
+    String registerUser(RegisterRequest registerRequest);
 
-    List<UserResponseDto> getAllUsers();
-    UserResponseDto getUserById(Long userId);
-    UserResponseDto updateUser(Long userId, UserUpdateDto userUpdateDto);
-    void deleteUser(Long userId);
+    JwtResponseDTO authenticateUser(AuthRequest authRequest);
+
+    // --- NEW METHODS FOR PROFILE MANAGEMENT ---
+    UserProfileResponse getUserProfileById(Long userId);
+
+    UserProfileResponse updateUserProfile(Long userId, UserProfileUpdateRequest request);
+    // --- END NEW METHODS ---
 }
