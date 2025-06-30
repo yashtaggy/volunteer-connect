@@ -1,14 +1,10 @@
-package com.volunteerconnect.backend.repository;
+package com.volunteerconnect.backend.repository; // Your existing package
 
-import com.volunteerconnect.backend.entity.User;
+import com.volunteerconnect.backend.model.User; // <--- ADD THIS LINE
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import java.util.Optional;
 
-import java.util.Optional; // Import this
-
-@Repository
 public interface UserRepository extends JpaRepository<User, Long> {
-    // Custom query methods
+
     Optional<User> findByUsername(String username);
-    Optional<User> findByEmail(String email);
 }

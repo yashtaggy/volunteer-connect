@@ -1,8 +1,15 @@
+// Example for LoginRequest.java
 package com.volunteerconnect.backend.dto;
 
-import lombok.Data; // Remember Lombok helps generate getters/setters
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.Builder;
 
-@Data // This Lombok annotation generates getters, setters, equals, hashCode, and toString methods
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class LoginRequest {
     private String username;
     private String password;

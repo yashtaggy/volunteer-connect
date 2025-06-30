@@ -1,13 +1,22 @@
+// Example for LoginResponse.java
 package com.volunteerconnect.backend.dto;
 
-import lombok.AllArgsConstructor; // Generates a constructor with all arguments
-import lombok.Data;              // Generates getters, setters, etc.
-import lombok.NoArgsConstructor;   // Generates a no-argument constructor
+import com.volunteerconnect.backend.model.Role;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
-@AllArgsConstructor // When you create a LoginResponse object, you can pass token and username directly: new LoginResponse("abc", "user")
-@NoArgsConstructor  // Spring/Jackson needs this for deserialization, though not strictly needed here for sending
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class LoginResponse {
-    private String token;    // This will hold the JWT (the long, generated string)
-    private String username; // We'll send the username back as well
+    private String token;
+    private Long userId;
+    private String username;
+    private String email;
+    private String firstName;
+    private String lastName;
+    private String role;
 }

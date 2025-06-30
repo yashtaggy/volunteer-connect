@@ -8,6 +8,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,14 +20,23 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+// NEW IMPORTS FOR CORS
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.Arrays;
+import java.util.List;
+// END NEW IMPORTS
+
+import java.time.Clock;
+
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
     private final UserRepository userRepository;
-    // REMOVE THIS FIELD: private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    // UPDATED CONSTRUCTOR: Remove JwtAuthenticationFilter from here
     public SecurityConfig(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
@@ -36,30 +46,60 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // MODIFY THIS METHOD: Add JwtAuthenticationFilter as a parameter
+    @Bean
+    public Clock clock() {
+        return Clock.systemDefaultZone();
+    }
+
+    // NEW CORS CONFIGURATION BEAN
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        // Allow requests from your React frontend URL
+        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        // Allow all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.)
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // Allow common headers
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
+        // Allow credentials (like cookies or HTTP authentication headers - for JWT, it's Authorization header)
+        configuration.setAllowCredentials(true);
+        // How long the preflight request's result can be cached (in seconds)
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        // Apply this CORS configuration to all paths in your API
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
+    }
+    // END NEW CORS CONFIGURATION BEAN
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter // ADD THIS PARAMETER
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            CorsConfigurationSource corsConfigurationSource // Inject the CORS source
     ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // APPLY CORS CONFIGURATION HERE
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                // END APPLY CORS CONFIGURATION
+
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/users/**").authenticated()
-                        .anyRequest().authenticated()
+                        // Ensure that all *other* paths are authenticated at the URL level
+                        // This acts as a fallback if method-level @PreAuthorize is missed
+                        .anyRequest().authenticated() // All other requests require authentication
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authenticationProvider(authenticationProvider())
-                // Keep this line, the filter is now passed as a method argument
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    // UserDetailsService and other beans remain the same
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> userRepository.findByUsername(username)
