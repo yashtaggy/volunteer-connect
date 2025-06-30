@@ -1,16 +1,17 @@
-package com.volunteerconnect.backend.service.impl;
+package com.volunteerconnect.backend.service;
 
 import com.volunteerconnect.backend.dto.AuthRequest;
 import com.volunteerconnect.backend.dto.JwtResponseDTO;
 import com.volunteerconnect.backend.dto.RegisterRequest;
-import com.volunteerconnect.backend.dto.UserProfileResponse; // Import new DTOs
-import com.volunteerconnect.backend.dto.UserProfileUpdateRequest; // Import new DTOs
-import com.volunteerconnect.backend.exception.ResourceNotFoundException; // You might need to create this custom exception
+import com.volunteerconnect.backend.dto.UserProfileResponse;
+import com.volunteerconnect.backend.dto.UserProfileUpdateRequest;
+import com.volunteerconnect.backend.exception.ResourceNotFoundException;
+import com.volunteerconnect.backend.model.Role; // <-- Import Role enum
 import com.volunteerconnect.backend.model.User;
 import com.volunteerconnect.backend.repository.UserRepository;
 import com.volunteerconnect.backend.security.JwtService;
 import com.volunteerconnect.backend.service.UserService;
-import jakarta.transaction.Transactional; // Import Transactional
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,10 +20,10 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime; // For updatedDate
+import java.time.LocalDateTime;
 
 @Service
-@Slf4j // For logging
+@Slf4j
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
@@ -41,7 +42,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional // Ensure transactional behavior for database operations
+    @Transactional
     public String registerUser(RegisterRequest registerRequest) {
         // Check if username or email already exists to prevent duplicates
         if (userRepository.findByUsername(registerRequest.getUsername()).isPresent()) {
@@ -57,7 +58,9 @@ public class UserServiceImpl implements UserService {
                 .email(registerRequest.getEmail())
                 .firstName(registerRequest.getFirstName())
                 .lastName(registerRequest.getLastName())
-                .role(registerRequest.getRole()) // Ensure role is set from request
+                // --- FIX 1: Convert String role to Role enum ---
+                .role(Role.valueOf(registerRequest.getRole().toUpperCase())) // Ensure role string matches enum names
+                // --- END FIX 1 ---
                 .createdDate(LocalDateTime.now())
                 .updatedDate(LocalDateTime.now())
                 .build();
@@ -74,8 +77,10 @@ public class UserServiceImpl implements UserService {
             User user = userRepository.findByUsername(authRequest.getUsername())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + authRequest.getUsername()));
 
-            // Generate token with roles from authenticated user
-            String token = jwtService.generateToken(user.getUsername(), user.getRole().name()); // Pass role as string
+            // --- FIX 2: Pass User object to generateToken ---
+            String token = jwtService.generateToken(user); // Now passing the User object directly
+            // --- END FIX 2 ---
+
             return JwtResponseDTO.builder()
                     .token(token)
                     .userId(user.getId())
@@ -90,8 +95,6 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    // --- NEW METHODS IMPLEMENTATION ---
-
     @Override
     public UserProfileResponse getUserProfileById(Long userId) {
         User user = userRepository.findById(userId)
@@ -103,12 +106,12 @@ public class UserServiceImpl implements UserService {
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
-                .role(user.getRole()) // Assuming role is an enum in your User model
+                .role(user.getRole())
                 .build();
     }
 
     @Override
-    @Transactional // Ensure transactional behavior for database operations
+    @Transactional
     public UserProfileResponse updateUserProfile(Long userId, UserProfileUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -120,6 +123,7 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedDate(LocalDateTime.now()); // Update timestamp
 
         // Optionally, check if the new email already exists for another user
+        // This check ensures unique emails across users
         if (userRepository.findByEmail(request.getEmail()).isPresent() &&
                 !user.getEmail().equals(request.getEmail())) {
             throw new IllegalArgumentException("Email already exists for another user!");
@@ -136,5 +140,4 @@ public class UserServiceImpl implements UserService {
                 .role(updatedUser.getRole())
                 .build();
     }
-    // --- END NEW METHODS IMPLEMENTATION ---
 }
