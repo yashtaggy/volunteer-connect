@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.volunteerconnect.backend.dto.UserSummaryDto;
-import com.volunteerconnect.backend.dto.organization.OrganizationSummaryDto; // NEW import for OrganizationSummaryDto
+import com.volunteerconnect.backend.dto.organization.OrganizationSummaryDto;
 
 @Data
 @NoArgsConstructor
@@ -25,10 +25,11 @@ public class EventResponse {
     private int capacity;
     private boolean active;
 
+    // --- ADD THIS FIELD ---
+    private String requiredSkills; // To send skills back to the frontend
+    // ----------------------
+
     private UserSummaryDto organizer;
-
-    // NEW: Organization information as a nested DTO
     private OrganizationSummaryDto organization;
-
     private List<UserSummaryDto> registeredVolunteers;
 }

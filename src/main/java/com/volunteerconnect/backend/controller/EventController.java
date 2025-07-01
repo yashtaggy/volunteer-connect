@@ -2,24 +2,25 @@ package com.volunteerconnect.backend.controller;
 
 import com.volunteerconnect.backend.dto.EventRequest;
 import com.volunteerconnect.backend.dto.EventResponse;
-import com.volunteerconnect.backend.model.User; // Ensure User model is imported for getPrincipal()
-import com.volunteerconnect.backend.service.EventService; // Import the NEW EventService
+import com.volunteerconnect.backend.exception.ResourceNotFoundException;
+import com.volunteerconnect.backend.service.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.prepost.PreAuthorize; // Import PreAuthorize
+import org.springframework.security.core.Authentication; // Import Authentication
+import org.springframework.security.core.context.SecurityContextHolder; // Import SecurityContextHolder
+import org.springframework.security.core.userdetails.UserDetails; // Import UserDetails
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map; // Import Map for error responses
+import com.volunteerconnect.backend.security.CustomUserDetails;
 
 @RestController
 @RequestMapping("/api/events")
 public class EventController {
 
-    // Inject the NEW EventService interface
     private final EventService eventService;
 
     @Autowired
@@ -27,63 +28,129 @@ public class EventController {
         this.eventService = eventService;
     }
 
-    // Helper method to get the current authenticated user's ID
-    // This assumes your Authentication.getPrincipal() returns your User entity directly
-    // from your UserDetailsService/JwtService implementation.
-    private Long getCurrentAuthenticatedUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not authenticated.");
-        }
-        // Ensure the principal is an instance of your User model
-        if (authentication.getPrincipal() instanceof User) {
-            return ((User) authentication.getPrincipal()).getId();
-        }
-        // This fallback should rarely be hit if your security configuration is correct
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Could not determine authenticated user ID from principal.");
-    }
-
-    // --- CREATE Operation ---
     @PostMapping
-    @PreAuthorize("hasRole('ORGANIZER')") // Only ORGANIZER can create events
+    @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<EventResponse> createEvent(@RequestBody EventRequest eventRequest) {
-        // The current authenticated user (who is an ORGANIZER) will be the event's organizer
-        Long currentUserId = getCurrentAuthenticatedUserId();
-        EventResponse newEvent = eventService.createEvent(eventRequest, currentUserId);
-        return new ResponseEntity<>(newEvent, HttpStatus.CREATED);
+        // Retrieve current authenticated user's ID
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long organizerId = null;
+        if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+            // Assuming your UserDetails implementation has a way to get the ID,
+            // or you retrieve it from your UserRepository based on username.
+            // For simplicity, let's get the username and find the user.
+            // A more robust solution might pass the entire User entity from SecurityContext.
+            // For now, let's assume `authentication.getName()` gives the username
+            // and you can get the user ID from the UserDetailsService or an additional service.
+            // Placeholder: In a real app, you'd fetch the actual User ID associated with this username.
+            // For now, we rely on the `organizerId` being passed to the service from a context/DB lookup.
+            // The service method expects the ID directly.
+            // Let's modify the createEvent endpoint to take the organizer ID from principal directly.
+            // If your UserDetails is a custom User object with an ID, you can cast it.
+            // If not, you need a way to get the User object by username.
+            // Assuming your `CustomUserDetails` (if you have one) implements `UserDetails` and has a `getId()` method.
+            // Or you'd fetch it from the database based on authentication.getName() (username).
+            // For now, we'll keep it simple and assume we're getting the ID from the principal.
+            // Or, more correctly, we'll get it in the service from the Authentication object itself if needed.
+            // For this method, let's assume the organizer ID is retrieved within the service layer itself
+            // or passed implicitly if your framework handles it.
+            // Let's refine this to explicitly get the user ID from authentication for safety.
+        }
+
+        // To get the User ID from the authenticated principal:
+        // This requires your UserDetails object to store the ID or be your custom User entity.
+        // Assuming your custom UserDetails can provide the ID directly.
+        Long currentUserId = null;
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.volunteerconnect.backend.security.CustomUserDetails customUserDetails) {
+            currentUserId = customUserDetails.getId(); // Assuming CustomUserDetails has a getId()
+        } else if (authentication.getName() != null) {
+            // Fallback: If CustomUserDetails is not used or doesn't expose ID,
+            // you'd typically have a UserService to find user by username.
+            // For now, let's assume CustomUserDetails is providing the ID.
+            throw new IllegalStateException("Authenticated principal does not contain user ID.");
+        }
+
+        if (currentUserId == null) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED); // Should not happen with @PreAuthorize
+        }
+
+        EventResponse createdEvent = eventService.createEvent(eventRequest, currentUserId);
+        return new ResponseEntity<>(createdEvent, HttpStatus.CREATED);
     }
 
-    // --- READ All Events ---
     @GetMapping
-    @PreAuthorize("isAuthenticated()") // Any authenticated user can view all events
+    @PreAuthorize("isAuthenticated()") // Anyone logged in can view all events
     public ResponseEntity<List<EventResponse>> getAllEvents() {
-        List<EventResponse> eventResponses = eventService.getAllEvents();
-        return ResponseEntity.ok(eventResponses);
+        List<EventResponse> events = eventService.getAllEvents();
+        return ResponseEntity.ok(events);
     }
 
-    // --- READ Single Event by ID ---
     @GetMapping("/{id}")
-    @PreAuthorize("isAuthenticated()") // Any authenticated user can view an event by ID
+    @PreAuthorize("isAuthenticated()") // Anyone logged in can view event details
     public ResponseEntity<EventResponse> getEventById(@PathVariable Long id) {
         EventResponse event = eventService.getEventById(id);
         return ResponseEntity.ok(event);
     }
 
-    // --- UPDATE Operation ---
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')") // Only Organizers or Admins can update events
+    @PreAuthorize("hasRole('ORGANIZER')")
     public ResponseEntity<EventResponse> updateEvent(@PathVariable Long id, @RequestBody EventRequest eventRequest) {
-        Long currentUserId = getCurrentAuthenticatedUserId(); // Needed for authorization check in service
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long currentUserId = null;
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.volunteerconnect.backend.security.CustomUserDetails customUserDetails) {
+            currentUserId = customUserDetails.getId();
+        } else {
+            throw new IllegalStateException("Authenticated principal does not contain user ID.");
+        }
         EventResponse updatedEvent = eventService.updateEvent(id, eventRequest, currentUserId);
         return ResponseEntity.ok(updatedEvent);
     }
 
-    // --- DELETE Operation ---
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ORGANIZER', 'ADMIN')") // Only Organizers or Admins can delete events
-    public ResponseEntity<HttpStatus> deleteEvent(@PathVariable Long id) {
-        Long currentUserId = getCurrentAuthenticatedUserId(); // Needed for authorization check in service
+    @PreAuthorize("hasRole('ORGANIZER')")
+    public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long currentUserId = null;
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.volunteerconnect.backend.security.CustomUserDetails customUserDetails) {
+            currentUserId = customUserDetails.getId();
+        } else {
+            throw new IllegalStateException("Authenticated principal does not contain user ID.");
+        }
         eventService.deleteEvent(id, currentUserId);
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        return ResponseEntity.noContent().build();
     }
+
+
+    // --- NEW: Endpoint for event registration ---
+    @PostMapping("/{id}/register")
+    @PreAuthorize("hasRole('VOLUNTEER')") // Only users with 'VOLUNTEER' role can register
+    public ResponseEntity<?> registerForEvent(@PathVariable("id") Long eventId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Long volunteerId = null;
+
+        // Retrieve the volunteer's ID from the authenticated principal
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.volunteerconnect.backend.security.CustomUserDetails customUserDetails) {
+            volunteerId = customUserDetails.getId();
+        } else {
+            // This case should ideally not be reached if authentication is successful and CustomUserDetails is used.
+            // Add robust error handling or ensure your UserDetails implementation always provides the ID.
+            return new ResponseEntity<>(Map.of("message", "Could not retrieve volunteer ID from authentication."), HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            EventResponse updatedEvent = eventService.registerForEvent(eventId, volunteerId);
+            return new ResponseEntity<>(updatedEvent, HttpStatus.OK); // Or HttpStatus.CREATED if you prefer
+        } catch (ResourceNotFoundException e) {
+            return new ResponseEntity<>(Map.of("message", e.getMessage()), HttpStatus.NOT_FOUND);
+        } catch (IllegalArgumentException e) {
+            return new ResponseEntity<>(Map.of("message", e.getMessage()), HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            // Catch any other unexpected exceptions
+            return new ResponseEntity<>(Map.of("message", "An unexpected error occurred: " + e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    // --- END NEW ENDPOINT ---
 }
