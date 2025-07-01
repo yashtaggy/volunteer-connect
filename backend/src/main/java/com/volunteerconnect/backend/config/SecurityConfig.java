@@ -2,6 +2,7 @@ package com.volunteerconnect.backend.config;
 
 import com.volunteerconnect.backend.repository.UserRepository;
 import com.volunteerconnect.backend.security.JwtAuthenticationFilter;
+import com.volunteerconnect.backend.model.User; // <--- NEW IMPORT for User model
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,13 +21,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-// NEW IMPORTS FOR CORS
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
-// END NEW IMPORTS
 
 import java.time.Clock;
 
@@ -51,45 +50,32 @@ public class SecurityConfig {
         return Clock.systemDefaultZone();
     }
 
-    // NEW CORS CONFIGURATION BEAN
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow requests from your React frontend URL
         configuration.setAllowedOrigins(List.of("http://localhost:5173"));
-        // Allow all HTTP methods (GET, POST, PUT, DELETE, OPTIONS, etc.)
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // Allow common headers
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
-        // Allow credentials (like cookies or HTTP authentication headers - for JWT, it's Authorization header)
         configuration.setAllowCredentials(true);
-        // How long the preflight request's result can be cached (in seconds)
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Apply this CORS configuration to all paths in your API
         source.registerCorsConfiguration("/api/**", configuration);
         return source;
     }
-    // END NEW CORS CONFIGURATION BEAN
 
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter,
-            CorsConfigurationSource corsConfigurationSource // Inject the CORS source
+            CorsConfigurationSource corsConfigurationSource
     ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                // APPLY CORS CONFIGURATION HERE
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                // END APPLY CORS CONFIGURATION
-
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/**").permitAll()
-                        // Ensure that all *other* paths are authenticated at the URL level
-                        // This acts as a fallback if method-level @PreAuthorize is missed
-                        .anyRequest().authenticated() // All other requests require authentication
+                        .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -102,6 +88,7 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
+        // Now directly return the User object as it implements UserDetails
         return username -> userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }

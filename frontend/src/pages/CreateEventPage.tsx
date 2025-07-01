@@ -18,6 +18,7 @@ const CreateEventPage: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true); // For initial role check/loading
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false); // For form submission state
 
   useEffect(() => {
     // Client-side role check before showing the form
@@ -26,7 +27,7 @@ const CreateEventPage: React.FC = () => {
     if (userRolesString) {
       try {
         const rolesArray = JSON.parse(userRolesString);
-        userRole = rolesArray[0]; // Get the primary role
+        userRole = rolesArray[0]; // Get the primary role (assuming first role is sufficient)
       } catch (e) {
         console.error("Failed to parse user roles from localStorage", e);
       }
@@ -53,23 +54,43 @@ const CreateEventPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true); // Indicate loading for form submission
+    setIsSubmitting(true); // Indicate submission in progress
     setError(null);
     setMessage(null);
 
     // Basic validation before sending
-    if (!formData.title || !formData.description || !formData.location || !formData.date || !formData.time || !formData.capacity) {
-      setError('Please fill in all required fields.');
-      setLoading(false);
+    if (!formData.title || !formData.description || !formData.location || !formData.date || !formData.time || formData.capacity <= 0) {
+      setError('Please fill in all required fields and ensure capacity is greater than 0.');
+      setIsSubmitting(false);
       return;
     }
 
+    // Format the date and time for LocalDateTime on the backend
+    // Backend expects ISO 8601 format (e.g., "YYYY-MM-DDTHH:mm:ss")
+    // Ensure you add seconds (':00') if your backend's LocalDateTime is strict
+    const eventDateTime = `${formData.date}T${formData.time}:00`; 
+
     try {
-      // Send the data to your backend API endpoint
-      // Ensure your backend's /api/events endpoint is expecting this structure
-      const response = await api.post('/events', formData); // Using the 'api' instance
+      const eventData = {
+        title: formData.title,
+        description: formData.description,
+        eventDate: eventDateTime, // Use the formatted date and time
+        location: formData.location,
+        capacity: formData.capacity, // Already parsed to number in handleChange
+        requiredSkills: formData.requiredSkills,
+        // --- IMPORTANT: HARDCODED ORGANIZATION ID FOR TESTING ---
+        // REPLACE '1' WITH THE ACTUAL ID OF THE ORGANIZATION YOU CREATED IN YOUR DATABASE
+        organizationId: 1, // <--- CHANGE THIS TO YOUR ACTUAL ORGANIZATION'S ID (e.g., 1 or 2)
+        // -----------------------------------------------------
+        active: true, // New events are active by default
+        // organizerId is handled by the backend's security context (getCurrentAuthenticatedUserId)
+      };
+
+      const response = await api.post('/events', eventData); // Using the 'api' instance
+      
       setMessage('Event created successfully!');
-      setFormData({ // Optionally reset form after successful submission
+      // Reset form after successful submission
+      setFormData({
         title: '',
         description: '',
         location: '',
@@ -80,22 +101,23 @@ const CreateEventPage: React.FC = () => {
       });
       console.log('Event created:', response.data);
       // Optional: Redirect to events list or event details page after creation
-      navigate('/events');
+      // navigate('/events'); // Uncomment if you want to redirect
     } catch (err) {
       console.error('Failed to create event:', err);
       if (axios.isAxiosError(err) && err.response) {
         // Handle specific backend validation errors or unauthorized access
-        setError(err.response.data.message || 'Error creating event. Check your inputs.');
+        // err.response.data might be a string or an object with a 'message' field
+        setError(err.response.data.message || JSON.stringify(err.response.data) || 'Error creating event. Check your inputs.');
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
     } finally {
-      setLoading(false);
+      setIsSubmitting(false); // End submission state
     }
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '20px' }}>Loading...</div>;
+    return <div style={{ textAlign: 'center', padding: '20px' }}>Loading permissions...</div>;
   }
 
   if (error && error.includes("You do not have permission")) {
@@ -105,8 +127,8 @@ const CreateEventPage: React.FC = () => {
   return (
     <div style={{ maxWidth: '600px', margin: '50px auto', padding: '25px', border: '1px solid #ddd', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', backgroundColor: '#fff' }}>
       <h2 style={{ textAlign: 'center', color: '#333', marginBottom: '30px' }}>Create New Event</h2>
-      {message && <p style={{ color: 'green', textAlign: 'center' }}>{message}</p>}
-      {error && <p style={{ color: 'red', textAlign: 'center' }}>{error}</p>}
+      {message && <p style={{ color: 'green', textAlign: 'center', fontWeight: 'bold' }}>{message}</p>}
+      {error && <p style={{ color: 'red', textAlign: 'center', fontWeight: 'bold' }}>{error}</p>}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <div>
           <label htmlFor="title" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Title:</label>
@@ -197,10 +219,10 @@ const CreateEventPage: React.FC = () => {
         </div>
         <button
           type="submit"
-          disabled={loading} // Disable button while submitting
-          style={{ padding: '12px 20px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '1.1em', marginTop: '20px' }}
+          disabled={isSubmitting} // Use isSubmitting to disable button
+          style={{ padding: '12px 20px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '1.1em', marginTop: '20px', opacity: isSubmitting ? 0.7 : 1 }}
         >
-          {loading ? 'Creating Event...' : 'Create Event'}
+          {isSubmitting ? 'Creating Event...' : 'Create Event'}
         </button>
       </form>
     </div>

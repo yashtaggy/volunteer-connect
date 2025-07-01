@@ -7,6 +7,7 @@ import com.volunteerconnect.backend.model.User;
 import com.volunteerconnect.backend.model.Role;
 import com.volunteerconnect.backend.service.AuthService;
 import com.volunteerconnect.backend.security.JwtService;
+// REMOVE THIS IMPORT: import com.volunteerconnect.backend.security.CustomUserDetails;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.userdetails.UserDetails; // Import UserDetails
+import org.springframework.security.core.userdetails.UserDetails; // Keep this import for method signature
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -74,15 +75,11 @@ public class AuthController {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Get the authenticated UserDetails object
-            // It will be an instance of your 'User' model because your UserDetailsService returns it.
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+            // Now, authentication.getPrincipal() will return your User object directly
+            User authenticatedUser = (User) authentication.getPrincipal(); // <--- Cast directly to User
 
-            // MODIFIED LINE: Pass the UserDetails object (your 'User' instance) to generateToken
-            String token = jwtService.generateToken(userDetails);
-
-            // Cast back to your User model if you need user-specific fields for the response
-            User authenticatedUser = (User) userDetails;
+            // Your JwtService.generateToken method should now accept a User object
+            String token = jwtService.generateToken(authenticatedUser); // <--- Pass the User object
 
             LoginResponse response = LoginResponse.builder()
                     .token(token)
@@ -91,7 +88,7 @@ public class AuthController {
                     .email(authenticatedUser.getEmail())
                     .firstName(authenticatedUser.getFirstName())
                     .lastName(authenticatedUser.getLastName())
-                    .role(authenticatedUser.getRole().name()) // Convert enum to string
+                    .role(authenticatedUser.getRole().name())
                     .build();
 
             return new ResponseEntity<>(response, HttpStatus.OK);
@@ -103,7 +100,8 @@ public class AuthController {
             System.err.println("Authentication error for user: " + loginRequest.getUsername() + ": " + e.getMessage());
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         } catch (Exception e) {
-            System.err.println("Unexpected error during login: " + loginRequest.getUsername() + ": " + e.getMessage());
+            System.err.println("Unexpected error during login for user: " + loginRequest.getUsername() + ": " + e.getMessage());
+            e.printStackTrace();
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

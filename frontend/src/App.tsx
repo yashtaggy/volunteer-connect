@@ -7,7 +7,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react
 import Home from './pages/Home';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import EventsPage from './pages/EventsPage';
+import EventsPage from './pages/EventsPage'; // This will now render the list of events
 import UserProfilePage from './pages/UserProfilePage';
 import CreateEventPage from './pages/CreateEventPage'; // <-- IMPORT THIS
 
@@ -54,6 +54,7 @@ function App() {
     };
 
     updateLoginStatus();
+    // Listen for changes in localStorage from other tabs/windows (e.g., login/logout)
     window.addEventListener('storage', updateLoginStatus);
     return () => {
       window.removeEventListener('storage', updateLoginStatus);
@@ -68,6 +69,7 @@ function App() {
     setIsLoggedIn(false);
     setCurrentUser(null);
     setCurrentUserRole(null); // Clear role on logout
+    // Dispatch a storage event so other components/tabs listening will update
     window.dispatchEvent(new Event('storage'));
   };
 
@@ -90,12 +92,12 @@ function App() {
                   <Link to="/dashboard">Dashboard</Link>
                 </li>
                 <li>
-                  <Link to="/events">Events</Link>
+                  <Link to="/events">Events</Link> {/* This now links to your EventsPage with the list */}
                 </li>
                 {/* --- CONDITIONAL RENDERING BASED ON ROLE --- */}
                 {hasRole('ORGANIZER') && ( // Only show if user is an ORGANIZER
                   <li>
-                    <Link to="/create-event">Create Event</Link> {/* <-- NEW LINK */}
+                    <Link to="/create-event">Create Event</Link> {/* <-- Link to CreateEventPage */}
                   </li>
                 )}
                 {/* --- END CONDITIONAL RENDERING --- */}
@@ -104,7 +106,7 @@ function App() {
                 </li>
                 <li>
                   <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', fontSize: '1em' }}>
-                    Logout ({currentUser} {currentUserRole ? `(${currentUserRole})` : ''}) {/* Display user role */}
+                    Logout ({currentUser} {currentUserRole ? `(${currentUserRole})` : ''})
                   </button>
                 </li>
               </>
@@ -131,7 +133,7 @@ function App() {
             path="/events"
             element={
               <PrivateRoute>
-                <EventsPage />
+                <EventsPage /> {/* This route will now render the list of events */}
               </PrivateRoute>
             }
           />
@@ -143,17 +145,16 @@ function App() {
               </PrivateRoute>
             }
           />
-          {/* --- NEW PROTECTED ROUTE FOR CREATE EVENT --- */}
-          {/* This route is protected by both authentication and role in backend/component logic */}
+          {/* --- PROTECTED ROUTE FOR CREATE EVENT --- */}
           <Route
             path="/create-event"
             element={
               <PrivateRoute>
-                <CreateEventPage />
+                <CreateEventPage /> {/* This route is correct for CreateEventPage */}
               </PrivateRoute>
             }
           />
-          {/* --- END NEW PROTECTED ROUTE --- */}
+          {/* --- END PROTECTED ROUTE --- */}
         </Routes>
       </div>
     </Router>

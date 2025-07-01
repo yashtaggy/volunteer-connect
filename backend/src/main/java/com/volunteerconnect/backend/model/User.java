@@ -1,100 +1,97 @@
 package com.volunteerconnect.backend.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data; // Provides @Getter, @Setter, @ToString, @EqualsAndHashCode, @RequiredArgsConstructor
-import lombok.NoArgsConstructor;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails; // Import UserDetails
-import com.volunteerconnect.backend.model.Role;
-
+import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.security.core.GrantedAuthority; // Import
+import org.springframework.security.core.authority.SimpleGrantedAuthority; // Import
+import org.springframework.security.core.userdetails.UserDetails; // Import
 
 import java.time.LocalDateTime;
 import java.util.Collection;
-import java.util.Collections; // For Collections.singletonList
+import java.util.Collections;
+import java.util.List; // For List.of()
 
-@Data // This generates getters, setters for fields like username, password etc.
-@Builder
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @Entity
-@Table(name = "users") // Good practice to use plural for table names
-public class User implements UserDetails { // Ensure it implements UserDetails
+@Table(name = "users")
+@EntityListeners(AuditingEntityListener.class)
+// Make User implement UserDetails
+public class User implements UserDetails { // <--- ADD "implements UserDetails"
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
-    private String username; // IMPORTANT: This field must exist for getUsername()
+    @Column(nullable = false, unique = true)
+    private String username;
 
     @Column(nullable = false)
     private String password;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(name = "first_name")
     private String firstName;
+
+    @Column(name = "last_name")
     private String lastName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Role role; // Ensure you have a 'Role' enum defined
+    private Role role;
 
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdDate;
+
+    @LastModifiedDate
+    @Column(insertable = false)
     private LocalDateTime updatedDate;
 
-    // --- UserDetails Interface Implementations ---
+    // --- UserDetails interface methods ---
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // Assign a role-based authority. Prefix with "ROLE_" is standard in Spring Security.
+        // Return a list of authorities based on the user's role
+        // Example: List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
         return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
     @Override
-    public String getUsername() {
-        // Returns the username used to authenticate the user.
-        return username;
+    public String getPassword() {
+        return password; // Your existing password field
     }
 
     @Override
-    public String getPassword() {
-        // Returns the password used to authenticate the user.
-        return password;
+    public String getUsername() {
+        return username; // Your existing username field
     }
 
     @Override
     public boolean isAccountNonExpired() {
-        return true; // For simplicity, assume accounts do not expire
+        return true; // For simplicity, always true
     }
 
     @Override
     public boolean isAccountNonLocked() {
-        return true; // For simplicity, assume accounts are not locked
+        return true; // For simplicity, always true
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true; // For simplicity, assume credentials do not expire
+        return true; // For simplicity, always true
     }
 
     @Override
     public boolean isEnabled() {
-        return true; // For simplicity, assume accounts are always enabled
-    }
-
-    // Lifecycle callbacks (optional, but good for auditing)
-    @PrePersist
-    protected void onCreate() {
-        this.createdDate = LocalDateTime.now();
-        this.updatedDate = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedDate = LocalDateTime.now();
+        return true; // For simplicity, always true
     }
 }
